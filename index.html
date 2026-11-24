@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>台中公車路線接送站查詢</title>
+<style>
+:root{--navy:#163b55;--blue:#1674b8;--ink:#1c2933;--muted:#687887;--line:#e2e9ef;--bg:#f3f6f8;--green:#16845b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}
+header{background:linear-gradient(120deg,#12364e,#176fa9);color:#fff;padding:34px 18px 48px}
+.wrap{max-width:920px;margin:auto;padding:0 18px}h1{font-size:clamp(25px,4vw,35px);margin:0 0 8px}header p{margin:0;color:#dcebf5;line-height:1.6}
+main{margin-top:-23px;padding-bottom:42px}.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 30px #173b5510}
+.field{margin-bottom:17px}label{display:block;font-weight:750;margin-bottom:8px}input,select{width:100%;padding:14px 14px;border:1px solid #cbd6df;border-radius:11px;font:inherit;font-size:16px;background:#fff;outline:none}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px #1674b81b}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.hint{font-size:12px;color:var(--muted);line-height:1.6;margin:7px 0 0}
+button{width:100%;border:0;border-radius:11px;background:var(--blue);color:#fff;padding:14px;font:inherit;font-weight:750;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}.status{margin:15px 3px;min-height:22px;color:var(--muted);font-size:14px;line-height:1.6}
+.results-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 2px 12px}.results-head h2{font-size:19px;margin:0}.tag{border-radius:30px;background:#e7f4ed;color:var(--green);font-size:12px;font-weight:750;padding:6px 10px}
+.list{display:grid;gap:11px}.item{display:flex;gap:14px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px 17px}
+.num{width:38px;height:38px;border-radius:12px;background:#eaf3fa;color:var(--blue);font-weight:800;display:grid;place-items:center;flex:none}
+.info{flex:1;min-width:0}.stop{font-size:18px;font-weight:800}.sub{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5}
+.dist{font-size:19px;color:var(--blue);font-weight:850;white-space:nowrap;text-align:right}.dist small{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.maplink{display:inline-block;margin-top:6px;font-size:12px;color:var(--blue);text-decoration:none}.maplink:hover{text-decoration:underline}
+.empty{background:#fff;border:1px dashed #cbd6df;border-radius:14px;padding:20px;text-align:center;color:var(--muted);line-height:1.7}
+footer{margin:18px 2px;color:var(--muted);font-size:12px;line-height:1.7}a{color:var(--blue)}
+@media(max-width:600px){.grid{grid-template-columns:1fr;gap:0}.item{padding:13px;gap:10px}.stop{font-size:16px}.dist{font-size:16px}}
+#pinPanel{display:none;margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#f8fbfd}#pickMap{height:330px;border-radius:10px;margin:10px 0;z-index:1}.pinActions{display:flex;gap:10px}.pinActions button{flex:1}#confirmPin{background:#16845b}#cancelPin{background:#687887}@media(max-width:600px){#pickMap{height:280px}.pinActions{flex-direction:column}}</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>台中公車・接送站點查詢</h1>
+<p>輸入接送地址與公車路線，只比較該路線的站牌，可依站牌到接送地址的汽車行駛距離或預估開車時間排序。</p>
+</div></header>
+<main class="wrap">
+<section class="panel">
+  <div class="field">
+    <label for="googleKey">Google Maps API 金鑰</label>
+    <input id="googleKey" type="password" placeholder="貼上你的 API Key（不會儲存在網頁檔案）" autocomplete="off">
+    <p class="hint">每次重新整理網頁後需重新輸入。請先在 Google Cloud 啟用「Maps JavaScript API」與「Routes API」，並將金鑰限制為你的 GitHub Pages 網址。</p>
+  </div>
+  <div class="field">
+    <label for="address">親友要來接你的地址</label>
+    <input id="address" placeholder="例如：台中市西屯區臺灣大道三段99號" autocomplete="street-address">
+    <p class="hint">可輸入完整門牌，例如：台中市潭子區勝利路131號。定位完成後請核對地圖位置。</p>
+  </div>
+  <div class="grid">
+    <div class="field">
+      <label for="route">你搭乘的公車路線</label>
+      <input id="route" list="routeOptions" placeholder="正在載入台中市公車路線…" autocomplete="off">
+      <datalist id="routeOptions"></datalist>
+      <p class="hint" id="routeHint">正在載入 TDX 提供的台中市公車路線清單；也可以直接輸入路線名稱搜尋。</p>
+    </div>
+    <div class="field">
+      <label for="direction">行駛方向</label>
+      <select id="direction">
+        <option value="all">去程＋返程（全部比較）</option>
+        <option value="0">去程</option>
+        <option value="1">返程</option>
+      </select>
+      <p class="hint">不確定方向時，先選全部比較。</p>
+    </div>
+  </div>
+  <div class="field">
+    <label for="sortMode">優先排序方式</label>
+    <select id="sortMode">
+      <option value="distance">開車距離最短</option>
+      <option value="duration">開車時間最短</option>
+    </select>
+    <p class="hint">可切換依汽車行駛距離或預估行車時間由短到長排序。</p>
+  </div>
+  <button id="search" onclick="findNearest()">找出這條路線最近的站</button>
+  <section id="pinPanel">
+    <strong>請確認門牌位置</strong>
+    <p class="hint" id="pinMessage">地圖資料沒有提供這個門牌的精確座標。請拖曳地圖上的圖釘，放到正確門牌位置後按「確認位置並繼續」。</p>
+    <div id="pickMap"></div>
+    <div class="pinActions"><button id="confirmPin" type="button">確認位置並繼續</button><button id="cancelPin" type="button">取消</button></div>
+  </section>
+</section>
+<div id="status" class="status" aria-live="polite"></div>
+<section id="resultSection" hidden>
+  <div class="results-head"><h2 id="resultTitle">最近站牌</h2><span class="tag" id="resultCount"></span></div>
+  <div id="results" class="list"></div>
+</section>
+<footer>
+  資料來源：交通部 TDX 台中市公車站序資料；地址定位使用 OpenStreetMap／Photon；汽車道路距離與即時路況時間使用 Google Maps Routes Library。<br>
+  排序距離為道路路網上的汽車行駛距離，不是直線距離；實際路線仍可能因單行道、施工及交通管制而不同。<br>
+  若地圖資料沒有門牌座標，系統會要求你在地圖上手動確認圖釘位置，不會以道路中心點冒充門牌。所有該路線站牌均計算汽車道路距離與目前路況預估時間後排序。Google 路況時間仍是估算值，實際行車可能因突發事故或交通管制而變動。<br>
+  <a href="https://citybus.taichung.gov.tw/" target="_blank" rel="noopener">台中市公車動態資訊網</a>　·　
+  <a href="https://tdx.transportdata.tw/" target="_blank" rel="noopener">TDX 運輸資料流通服務</a>
+</footer>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const clean=s=>String(s??"").normalize("NFKC").trim().toLocaleLowerCase()
+  .replace(/\s+/g,"").replace(/[台臺]/g,"臺")
+  .replace(/(市區公車|公車|路線|路)$/g,"");
+function say(s){$("status").textContent=s;}
+function straightDist(a,b){
+  const rad=x=>x*Math.PI/180,R=6371000,d1=rad(b.lat-a.lat),d2=rad(b.lon-a.lon);
+  const h=Math.sin(d1/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(d2/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+function fmt(m){return m<1000?Math.round(m)+" 公尺":(m/1000).toFixed(2)+" 公里";}
+function fmtDuration(seconds){
+  if(!Number.isFinite(seconds)) return "無法估算";
+  const mins=Math.max(1,Math.round(seconds/60));
+  if(mins<60) return "約 "+mins+" 分鐘";
+  const h=Math.floor(mins/60),m=mins%60;
+  return m?("約 "+h+" 小時 "+m+" 分鐘"):("約 "+h+" 小時");
+}
+function fieldName(v){
+  if(typeof v==="object" && v!==null) return v.Zh_tw||v.zh_tw||v.En||v.en||"";
+  return v??"";
+}
+async function fetchJson(url,options={}){
+  const r=await fetch(url,options);
+  if(!r.ok) throw Error("HTTP "+r.status);
+  return r.json();
+}
+function normalizeDigits(s){
+  const full="０１２３４５６７８９",half="0123456789";
+  return String(s).replace(/[０-９]/g,ch=>half[full.indexOf(ch)]);
+}
+function requestedHouseNumber(address){
+  const m=normalizeDigits(address).match(/(\d+(?:之\d+)?)(?:號|号)/);
+  return m?m[1]:"";
+}
+function candidateHasHouseNumber(item,number){
+  if(!number) return true;
+  const a=item.address||{},p=item.properties||{};
+  const fields=[a.house_number,p.housenumber,p.house_number,item.display_name,p.name];
+  return fields.some(v=>v && normalizeDigits(String(v)).replace(/\s/g,"").includes(number));
+}
+async function locateAddress(address){
+  let q=normalizeDigits(address.trim());
+  if(!/台中|臺中/.test(q)) q="台中市"+q;
+  const number=requestedHouseNumber(q);
+  const queries=[...new Set([
+    q,
+    q.replace(/(\d+(?:之\d+)?)(號|号)/g," $1 $2"),
+    q.replace(/[，,]/g,"").replace(/\s+/g,""),
+    q.replace(/台中市/g,"臺中市")
+  ])];
+  let all=[],lastError=null;
+
+  // Search exact full address in Nominatim and Photon.
+  for(const query of queries){
+    try{
+      const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=15&countrycodes=tw&accept-language=zh-TW&q="+encodeURIComponent(query);
+      const d=await fetchJson(u,{headers:{Accept:"application/json"}});
+      if(Array.isArray(d)) all.push(...d);
+    }catch(e){lastError=e;}
+    try{
+      const u="https://photon.komoot.io/api/?limit=15&lang=zh&q="+encodeURIComponent(query);
+      const d=await fetchJson(u,{headers:{Accept:"application/json"}});
+      for(const f of (d.features||[])){
+        const p=f.properties||{},c=f.geometry?.coordinates;
+        if(c) all.push({lat:c[1],lon:c[0],display_name:[p.country,p.state,p.city,p.district,p.street,p.housenumber,p.name].filter(Boolean).join(" "),
+          address:{house_number:p.housenumber||""},properties:p});
+      }
+    }catch(e){lastError=e;}
+  }
+
+  const isTaichung=x=>/台中|臺中|Taichung/i.test(x.display_name||"");
+  const houseOf=x=>{
+    const a=x.address||{},p=x.properties||{};
+    return normalizeDigits(String(a.house_number||p.housenumber||p.house_number||"")).replace(/\s/g,"");
+  };
+  const dedup=new Map();
+  for(const x of all){
+    const lat=Number(x.lat),lon=Number(x.lon);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||!isTaichung(x)) continue;
+    const key=lat.toFixed(6)+","+lon.toFixed(6);
+    if(!dedup.has(key)) dedup.set(key,x);
+  }
+  const candidates=[...dedup.values()];
+
+  // Exact house-number match only; do not treat a street centroid as a house.
+  if(number){
+    const exact=candidates.filter(x=>houseOf(x)===number);
+    if(exact.length){
+      const hit=exact[0];
+      return {lat:Number(hit.lat),lon:Number(hit.lon),label:hit.display_name||q,houseNumber:number};
+    }
+  }else if(candidates.length){
+    const hit=candidates[0];
+    return {lat:Number(hit.lat),lon:Number(hit.lon),label:hit.display_name||q,houseNumber:""};
+  }
+
+  // If the map provider has no house-number record, find the street only as a
+  // starting point, then require the user to place the pin on the actual address.
+  if(number){
+    const streetQuery=q.replace(/\s*\d+(?:之\d+)?\s*(?:號|号).*/,"").trim();
+    if(streetQuery){
+      for(const query of [streetQuery,streetQuery.replace(/台中市/g,"臺中市")]){
+        try{
+          const u="https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&countrycodes=tw&accept-language=zh-TW&q="+encodeURIComponent(query);
+          const d=await fetchJson(u,{headers:{Accept:"application/json"}});
+          const hit=(d||[]).find(isTaichung);
+          if(hit) return {lat:Number(hit.lat),lon:Number(hit.lon),label:hit.display_name||streetQuery,houseNumber:"",needsPin:true,requestedNumber:number};
+        }catch(e){lastError=e;}
+      }
+      try{
+        const u="https://photon.komoot.io/api/?limit=5&lang=zh&q="+encodeURIComponent(streetQuery);
+        const d=await fetchJson(u,{headers:{Accept:"application/json"}});
+        const hit=(d.features||[]).find(f=>/台中|臺中|Taichung/i.test(JSON.stringify(f.properties||{})));
+        if(hit){
+          const p=hit.properties||{},c=hit.geometry.coordinates;
+          return {lat:Number(c[1]),lon:Number(c[0]),label:[p.city,p.district,p.street,p.name].filter(Boolean).join(" ")||streetQuery,
+            houseNumber:"",needsPin:true,requestedNumber:number};
+        }
+      }catch(e){lastError=e;}
+    }
+  }
+  if(lastError && !candidates.length) throw Error("地址定位服務目前無法連線，請確認網路後重試。");
+  if(number) throw Error("地圖資料找不到這個門牌，也找不到可用的道路定位點。請確認地址格式，例如「台中市潭子區勝利路131號」。");
+  throw Error("找不到這個地址。請輸入完整地址或附近地標。");
+}
+
+// Fallback pin picker: user can manually place the exact house location when
+// OpenStreetMap/Photon do not contain the requested house number.
+let pinMap=null,pinMarker=null,pendingSearch=null;
+function showPinPicker(point,continueSearch){
+  pendingSearch=continueSearch;
+  $("pinPanel").style.display="block";
+  $("pinMessage").textContent="地圖資料沒有「"+point.requestedNumber+"號」的精確門牌點。現在顯示的是附近道路參考位置，請在地圖上縮放並拖曳圖釘到正確門牌，再確認。";
+  if(!pinMap){
+    pinMap=L.map("pickMap").setView([point.lat,point.lon],18);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(pinMap);
+    pinMarker=L.marker([point.lat,point.lon],{draggable:true}).addTo(pinMap);
+  }else{
+    pinMap.setView([point.lat,point.lon],18);
+    pinMarker.setLatLng([point.lat,point.lon]);
+  }
+  setTimeout(()=>pinMap.invalidateSize(),150);
+  $("pinPanel").scrollIntoView({behavior:"smooth",block:"start"});
+}
+$("confirmPin").addEventListener("click",async()=>{
+  if(!pinMarker||!pendingSearch)return;
+  const p=pinMarker.getLatLng();
+  $("pinPanel").style.display="none";
+  const task=pendingSearch;pendingSearch=null;
+  await task({lat:p.lat,lon:p.lng,label:"使用者在地圖上確認的門牌位置",houseNumber:"手動定位"});
+});
+$("cancelPin").addEventListener("click",()=>{
+  $("pinPanel").style.display="none";pendingSearch=null;
+  say("已取消門牌位置確認。請修改地址後重新搜尋。");
+});
+async function loadRouteCatalog(){
+  const hint=$("routeHint"),input=$("route");
+  try{
+    say("正在載入台中市所有可查詢公車路線…");
+    const url="https://tdx.transportdata.tw/api/basic/v2/Bus/Route/City/Taichung?$format=JSON";
+    const data=await fetchJson(url,{headers:{Accept:"application/json"}});
+    if(!Array.isArray(data)) throw Error("路線資料格式異常");
+    const names=[...new Set(data.map(x=>fieldName(x.RouteName)).filter(Boolean))]
+      .sort((a,b)=>a.localeCompare(b,"zh-Hant",{numeric:true,sensitivity:"base"}));
+    if(!names.length) throw Error("沒有取得路線名稱");
+    const list=$("routeOptions");
+    list.innerHTML="";
+    names.forEach(name=>{
+      const option=document.createElement("option");
+      option.value=name;
+      list.appendChild(option);
+    });
+    input.placeholder="輸入或選擇路線（共 "+names.length+" 條）";
+    hint.textContent="已載入 "+names.length+" 條 TDX 台中市公車路線；可輸入數字、中文或從建議清單選擇。";
+    say("台中市公車路線清單載入完成，共 "+names.length+" 條。請輸入或選擇路線。");
+  }catch(e){
+    input.placeholder="例如：3、300、700 或路線名稱";
+    hint.textContent="路線清單暫時載入失敗；仍可直接輸入路線名稱查詢，請稍後重新整理清單。";
+    say("路線清單載入失敗，仍可手動輸入路線查詢。"+(e.message?"（"+e.message+"）":""));
+  }
+}
+async function getRouteStops(route){
+  const city="Taichung";
+  const base="https://tdx.transportdata.tw/api/basic/v2/Bus/StopOfRoute/City/"+city;
+  let data=null,lastError=null;
+
+  // 優先查單一路線；若純數字或特殊路線名稱查不到，再載入路線清單比對。
+  try{
+    data=await fetchJson(base+"/"+encodeURIComponent(route)+"?$format=JSON",{headers:{Accept:"application/json"}});
+    if(!Array.isArray(data)) data=[];
+  }catch(e){lastError=e;data=[];}
+
+  const wanted=clean(route);
+  let exact=data.filter(x=>clean(fieldName(x.RouteName))===wanted);
+
+  if(!exact.length){
+    try{
+      const all=await fetchJson(base+"?$format=JSON",{headers:{Accept:"application/json"}});
+      if(Array.isArray(all)){
+        exact=all.filter(x=>clean(fieldName(x.RouteName))===wanted);
+      }
+    }catch(e){lastError=e;}
+  }
+
+  if(!exact.length){
+    if(lastError && !data.length) throw Error("目前無法取得 TDX 公車資料，請稍後再試。");
+    throw Error("找不到「"+route+"」這條台中公車路線。可試著只輸入路線數字（例如 3），或確認是否為台中市公車。");
+  }
+
+  const rows=[];
+  for(const group of exact){
+    const routeName=fieldName(group.RouteName)||route;
+    const direction=Number(group.Direction);
+    for(const s of (group.Stops||[])){
+      const p=s.StopPosition||{};
+      const lat=Number(p.PositionLat),lon=Number(p.PositionLon);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)) continue;
+      rows.push({
+        route:routeName,direction,
+        directionText:direction===0?"去程":direction===1?"返程":"方向未標示",
+        stop:fieldName(s.StopName)||"未命名站牌",
+        sequence:s.StopSequence,lat,lon
+      });
+    }
+  }
+  if(!rows.length) throw Error("找到這條路線，但 TDX 沒有提供可用的站牌座標。");
+  return rows;
+}
+
+// Google Maps JavaScript Routes Library：以實際汽車道路路線計算距離及即時路況時間。
+let googleRoutesPromise=null;
+async function loadGoogleRoutes(){
+  const key=$("googleKey").value.trim();
+  if(!key) throw Error("請先輸入 Google Maps API 金鑰。");
+  if(window.google?.maps?.importLibrary){
+    return google.maps.importLibrary("routes");
+  }
+  if(!googleRoutesPromise){
+    googleRoutesPromise=new Promise((resolve,reject)=>{
+      const callbackName="__taichungGoogleMapsReady";
+      window[callbackName]=()=>resolve();
+      const script=document.createElement("script");
+      script.src="https://maps.googleapis.com/maps/api/js?key="+encodeURIComponent(key)+
+        "&v=weekly&loading=async&callback="+callbackName;
+      script.async=true;
+      script.onerror=()=>reject(Error("Google Maps 載入失敗。請檢查 API Key、帳單設定及 Maps JavaScript API 是否已啟用。"));
+      document.head.appendChild(script);
+    }).then(()=>google.maps.importLibrary("routes")).catch(e=>{
+      googleRoutesPromise=null;
+      throw e;
+    });
+  }
+  return googleRoutesPromise;
+}
+async function getDrivingDistances(origin,stops){
+  const {RouteMatrix}=await loadGoogleRoutes();
+  const output=[];
+  // TRAFFIC_AWARE_OPTIMAL 每次最多 100 個 origin×destination 元素。
+  // 一個 origin 分批配對 90 個站牌，保留 API 限制餘裕。
+  const batchSize=90;
+  for(let i=0;i<stops.length;i+=batchSize){
+    const batch=stops.slice(i,i+batchSize);
+    say("Google 正在計算即時路況與道路距離…（"+Math.min(i+batch.length,stops.length)+"/"+stops.length+"）");
+    let result;
+    try{
+      result=await RouteMatrix.computeRouteMatrix({
+        origins:[{lat:origin.lat,lng:origin.lon}],
+        destinations:batch.map(s=>({lat:s.lat,lng:s.lon})),
+        travelMode:"DRIVING",
+        routingPreference:"TRAFFIC_AWARE_OPTIMAL",
+        trafficModel:"BEST_GUESS",
+        language:"zh-TW",
+        region:"TW",
+        fields:["distanceMeters","durationMillis","condition"]
+      });
+    }catch(e){
+      const message=String(e?.message||e||"");
+      if(/REQUEST_DENIED|not authorized|billing|API key|RefererNotAllowed/i.test(message)){
+        throw Error("Google 路線服務拒絕請求。請確認 Maps JavaScript API、Routes API 已啟用、帳單已設定，且 API Key 的網站限制包含目前 GitHub Pages 網址。");
+      }
+      throw Error("Google 即時路況路線計算失敗："+message);
+    }
+    const items=result?.matrix?.rows?.[0]?.items||[];
+    batch.forEach((s,j)=>{
+      const item=items[j];
+      const meters=item?.distanceMeters;
+      const seconds=Number(item?.durationMillis)/1000;
+      if(item?.condition==="ROUTE_EXISTS" && Number.isFinite(meters) && Number.isFinite(seconds)){
+        output.push({...s,distance:meters,duration:seconds});
+      }
+    });
+  }
+  if(!output.length) throw Error("Google 找不到可行駛路線。請確認地址圖釘及站牌座標，或檢查 Google Routes API 權限。");
+  return output;
+}
+function addResult(item,index,addressPoint){
+  const card=document.createElement("article");card.className="item";
+  const num=document.createElement("div");num.className="num";num.textContent=String(index+1).padStart(2,"0");
+  const info=document.createElement("div");info.className="info";
+  const stop=document.createElement("div");stop.className="stop";stop.textContent=item.stop;
+  const sub=document.createElement("div");sub.className="sub";
+  sub.textContent=item.route+" 路・"+item.directionText+(item.sequence?"・第 "+item.sequence+" 站":"");
+  const link=document.createElement("a");link.className="maplink";link.target="_blank";link.rel="noopener";
+  link.href="https://www.google.com/maps/dir/?api=1&origin="+
+    addressPoint.lat+","+addressPoint.lon+"&destination="+item.lat+","+item.lon+"&travelmode=driving";
+  link.textContent="在 Google 地圖查看汽車行車路線 ↗";
+  info.append(stop,sub,link);
+  const d=document.createElement("div");d.className="dist";
+  d.textContent=fmt(item.distance);
+  const distanceLabel=document.createElement("small");distanceLabel.textContent="汽車行車距離";
+  const time=document.createElement("div");time.style.cssText="font-size:14px;font-weight:750;color:#16845b;margin-top:5px";
+  time.textContent=fmtDuration(item.duration);
+  const timeLabel=document.createElement("small");timeLabel.textContent="預估開車時間";
+  d.append(distanceLabel,time,timeLabel);
+  card.append(num,info,d);$("results").appendChild(card);
+}
+async function runSearchWithPoint(point,address,route,direction,btn){
+  try{
+    say("正在搜尋台中市「"+route+"」路線站牌…");
+    const stops=await getRouteStops(route);
+    const filtered=direction==="all"?stops:stops.filter(s=>s.direction===Number(direction));
+    if(!filtered.length) throw Error("這條路線沒有符合所選方向的站牌資料，請改選「去程＋返程」。");
+    say("已找到 "+filtered.length+" 個站牌，準備計算 Google 汽車道路距離與即時路況…");
+    const ranked=await getDrivingDistances(point,filtered);
+    const sortMode=$("sortMode").value;
+    ranked.sort((a,b)=>sortMode==="duration"
+      ? (a.duration-b.duration || a.distance-b.distance)
+      : (a.distance-b.distance || a.duration-b.duration));
+    const seen=new Set(),unique=[];
+    for(const s of ranked){
+      const key=[s.direction,s.stop,s.lat.toFixed(6),s.lon.toFixed(6)].join("|");
+      if(seen.has(key))continue;
+      seen.add(key);unique.push(s);
+    }
+    $("results").innerHTML="";
+    unique.slice(0,15).forEach((s,i)=>addResult(s,i,point));
+    $("resultTitle").textContent=route+" 路｜依"+(sortMode==="duration"?"預估開車時間":"汽車行車距離")+"排序";
+    $("resultCount").textContent="找到 "+unique.length+" 個可計算站牌";
+    $("resultSection").hidden=false;
+    say("搜尋完成。定位方式："+point.label+"。時間依 Google 目前路況估算，實際行車仍可能變動。");
+  }catch(e){say(e.message||"發生未知錯誤，請稍後再試。");}
+  finally{btn.disabled=false;}
+}
+async function findNearest(){
+  const address=$("address").value.trim(),route=$("route").value.trim(),direction=$("direction").value;
+  if(!$("googleKey").value.trim()){say("請先輸入 Google Maps API 金鑰。");$("googleKey").focus();return;}
+  if(!address){say("請輸入親友接送的地址。");$("address").focus();return;}
+  if(!route){say("請輸入你搭乘的公車路線。");$("route").focus();return;}
+  const btn=$("search");btn.disabled=true;$("resultSection").hidden=true;$("results").innerHTML="";
+  $("pinPanel").style.display="none";pendingSearch=null;
+  try{
+    say("正在搜尋完整門牌地址…");
+    const point=await locateAddress(address);
+    if(point.needsPin){
+      showPinPicker(point,manualPoint=>runSearchWithPoint(manualPoint,address,route,direction,btn));
+      say("地圖資料沒有完整門牌座標，請在下方地圖手動確認門牌位置。");
+      btn.disabled=false;
+      return;
+    }
+    await runSearchWithPoint(point,address,route,direction,btn);
+  }catch(e){say(e.message||"發生未知錯誤，請稍後再試。");btn.disabled=false;}
+}
+$("address").addEventListener("keydown",e=>{if(e.key==="Enter")findNearest();});
+$("route").addEventListener("keydown",e=>{if(e.key==="Enter")findNearest();});
+loadRouteCatalog();
+</script>
+</body>
+</html>
