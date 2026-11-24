@@ -35,9 +35,7 @@ footer{margin:18px 2px;color:var(--muted);font-size:12px;line-height:1.7}a{color
 <main class="wrap">
 <section class="panel">
   <div class="field">
-    <label for="googleKey">Google Maps API 金鑰</label>
-    <input id="googleKey" type="password" placeholder="貼上你的 API Key（不會儲存在網頁檔案）" autocomplete="off">
-    <p class="hint">每次重新整理網頁後需重新輸入。請先在 Google Cloud 啟用「Maps JavaScript API」與「Routes API」，並將金鑰限制為你的 GitHub Pages 網址。</p>
+    <p class="hint">Google 路線服務金鑰已設定在網頁程式中，不需要每次輸入。請勿分享未限制的 API 金鑰。</p>
   </div>
   <div class="field">
     <label for="address">親友要來接你的地址</label>
@@ -92,6 +90,10 @@ footer{margin:18px 2px;color:var(--muted);font-size:12px;line-height:1.7}a{color
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// 將你的 Google Maps API Key 貼在下方引號內。
+// 公開 GitHub Repository 的程式碼任何人都看得到；請務必限制網站來源與 API。
+const GOOGLE_MAPS_API_KEY = "請在這裡貼上你的Google_API_Key";
+
 const $=id=>document.getElementById(id);
 const clean=s=>String(s??"").normalize("NFKC").trim().toLocaleLowerCase()
   .replace(/\s+/g,"").replace(/[台臺]/g,"臺")
@@ -325,8 +327,8 @@ async function getRouteStops(route){
 // Google Maps JavaScript Routes Library：以實際汽車道路路線計算距離及即時路況時間。
 let googleRoutesPromise=null;
 async function loadGoogleRoutes(){
-  const key=$("googleKey").value.trim();
-  if(!key) throw Error("請先輸入 Google Maps API 金鑰。");
+  const key=GOOGLE_MAPS_API_KEY.trim();
+  if(!key || key.includes("請在這裡貼上")) throw Error("請先在 index.html 程式碼中的 GOOGLE_MAPS_API_KEY 貼上你的金鑰，再上傳 GitHub。");
   if(window.google?.maps?.importLibrary){
     return google.maps.importLibrary("routes");
   }
@@ -437,7 +439,7 @@ async function runSearchWithPoint(point,address,route,direction,btn){
 }
 async function findNearest(){
   const address=$("address").value.trim(),route=$("route").value.trim(),direction=$("direction").value;
-  if(!$("googleKey").value.trim()){say("請先輸入 Google Maps API 金鑰。");$("googleKey").focus();return;}
+  if(!GOOGLE_MAPS_API_KEY.trim() || GOOGLE_MAPS_API_KEY.includes("請在這裡貼上")){say("請先在 index.html 程式碼中的 GOOGLE_MAPS_API_KEY 貼上你的金鑰，再上傳 GitHub。");return;}
   if(!address){say("請輸入親友接送的地址。");$("address").focus();return;}
   if(!route){say("請輸入你搭乘的公車路線。");$("route").focus();return;}
   const btn=$("search");btn.disabled=true;$("resultSection").hidden=true;$("results").innerHTML="";
