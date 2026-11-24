@@ -350,7 +350,7 @@ async function loadGoogleRoutes(){
 async function getDrivingDistances(origin,stops){
   const {RouteMatrix}=await loadGoogleRoutes();
   const output=[];
-  // TRAFFIC_AWARE_OPTIMAL 每次最多 100 個 origin×destination 元素。
+  // TRAFFIC_AWARE_OPTIMAL 每次最多 100 個 origin×destination 元素；不指定 trafficModel，Google 預設使用 BEST_GUESS。
   // 一個 origin 分批配對 90 個站牌，保留 API 限制餘裕。
   const batchSize=90;
   for(let i=0;i<stops.length;i+=batchSize){
@@ -363,7 +363,6 @@ async function getDrivingDistances(origin,stops){
         destinations:batch.map(s=>({lat:s.lat,lng:s.lon})),
         travelMode:"DRIVING",
         routingPreference:"TRAFFIC_AWARE_OPTIMAL",
-        trafficModel:"BEST_GUESS",
         language:"zh-TW",
         region:"TW",
         fields:["distanceMeters","durationMillis","condition"]
