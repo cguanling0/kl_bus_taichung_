@@ -58,6 +58,13 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
 <p>輸入你的所在地與親友接送地點，自動比較可搭乘的台中公車路線，找出方便上車、最接近親友的下車站。</p>
 </div></header>
 <main class="wrap">
+<nav class="tabs" aria-label="功能頁籤">
+  <button type="button" class="tab active" data-tab="route" aria-selected="true">路線規劃</button>
+  <button type="button" class="tab" data-tab="buses" aria-selected="false">路線結果</button>
+  <button type="button" class="tab" data-tab="time" aria-selected="false">指定上車時間</button>
+  <button type="button" class="tab" data-tab="history" aria-selected="false">收藏與紀錄</button>
+</nav>
+<div class="tabPane" id="pane-route">
 <section class="panel">
   <div class="grid">
     <div class="field">
@@ -132,6 +139,7 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
   </section>
 </section>
 </div>
+</div>
 
 <div id="status" class="status" aria-live="polite"></div>
 <div class="tabPane" id="pane-buses" hidden>
@@ -178,7 +186,7 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
 <script>
 // 將你目前使用的 Google Maps API Key 貼在下方引號內。
 // 請在 Google Cloud 限制 GitHub Pages 網域與 Maps JavaScript API、Routes API。
-const GOOGLE_MAPS_API_KEY = "請在這裡貼上你的Google_API_Key";
+const GOOGLE_MAPS_API_KEY = "AIzaSyBsPGLbQZUDKN_dsgMvbk1lLNrPBoYPWH0";
 
 const $=id=>document.getElementById(id);
 const TDX="https://tdx.transportdata.tw/api/basic/v2/Bus";
@@ -197,7 +205,7 @@ function fmt(m){return m<1000?Math.round(m)+" 公尺":(m/1000).toFixed(2)+" 公�
 function fmtTime(sec){if(!Number.isFinite(sec))return"無法估算";let m=Math.max(1,Math.round(sec/60));return m<60?"約 "+m+" 分鐘":"約 "+Math.floor(m/60)+" 小時 "+(m%60?m%60+" 分鐘":"");}
 async function fetchJson(url,options={}){const r=await fetch(url,options);if(!r.ok)throw Error("HTTP "+r.status);return r.json();}
 function setDefaultDeparture(){const d=new Date(Date.now()+10*60000);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$("departAt").value=d.toISOString().slice(0,16);$("boardAt").value=d.toISOString().slice(0,16);$("boardAtCopy").value=d.toISOString().slice(0,16);}
-function setTab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));document.querySelectorAll(".tabPane").forEach(p=>p.hidden=p.id!=="pane-"+name);if(name==="buses"&&$("resultSection").hidden)$("busEmpty").hidden=false;else if(name==="buses")$("busEmpty").hidden=true;}
+function setTab(name){document.querySelectorAll(".tab").forEach(b=>{const active=b.dataset.tab===name;b.classList.toggle("active",active);b.setAttribute("aria-selected",String(active));});document.querySelectorAll(".tabPane").forEach(p=>p.hidden=p.id!=="pane-"+name);if(name==="buses"&&$("resultSection").hidden)$("busEmpty").hidden=false;else if(name==="buses")$("busEmpty").hidden=true;}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
 $("boardAt").addEventListener("change",()=>{$("boardAtCopy").value=$("boardAt").value;});
 $("boardAtCopy").addEventListener("change",()=>{$("boardAt").value=$("boardAtCopy").value;});
