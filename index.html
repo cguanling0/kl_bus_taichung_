@@ -37,11 +37,24 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
 #historyList:empty:after{content:"尚無搜尋紀錄";color:var(--muted);font-size:13px}
 .eta{margin-top:10px;padding:10px;background:#f1f8f4;border-radius:10px;font-size:13px;line-height:1.6}
 @media(max-width:680px){.grid,.grid3{grid-template-columns:1fr;gap:0}.routeGrid{grid-template-columns:1fr 1fr}.path{grid-template-columns:1fr auto 1fr}.panel{padding:16px}.routeName{font-size:18px}}
+
+.tabs{display:flex;gap:7px;overflow-x:auto;padding:7px;background:#e8eff4;border-radius:14px;margin:0 0 14px}
+.tab{white-space:nowrap;flex:1;background:transparent;color:#536879;padding:11px 13px;border-radius:10px}
+.tab.active{background:#fff;color:#145d91;box-shadow:0 2px 9px #173b5514}
+.tabPane[hidden]{display:none!important}
+.busArrival{margin-top:12px;padding:13px;border-radius:12px;background:#f0f8f4;border:1px solid #d6ecdf}
+.busArrival h4{margin:0 0 8px;font-size:15px;color:#176a49}
+.arrivalLine{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #dcece2;font-size:13px}
+.arrivalLine strong{font-size:16px;color:#13734c}
+.arrivalLine small{color:#64786d}
+.timeNotice{padding:11px 13px;border-radius:11px;background:#fff7e8;color:#875315;font-size:13px;line-height:1.65;margin-top:10px}
+.heroKicker{font-size:12px;letter-spacing:.08em;color:#d1e7f5;font-weight:800;margin-bottom:8px}
+@media(max-width:680px){.tab{flex:none}.tabs{margin-left:-3px;margin-right:-3px}}
 </style>
 </head>
 <body>
 <header><div class="wrap">
-<h1>台中公車・接送路線規劃</h1>
+<div class="heroKicker">TAICHUNG TRANSIT · PICKUP PLANNER</div><h1>台中公車・接送路線規劃</h1>
 <p>輸入你的所在地與親友接送地點，自動比較可搭乘的台中公車路線，找出方便上車、最接近親友的下車站。</p>
 </div></header>
 <main class="wrap">
@@ -82,6 +95,11 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
   </div>
   <div class="grid">
     <div class="field">
+      <label for="boardAt">你希望搭上公車的時間</label>
+      <input id="boardAt" type="datetime-local">
+      <p class="hint">若選「現在／近期」，會用即時到站資料列出最快可搭班次；未來時刻若無官方班表資料，不會假造班次。</p>
+    </div>
+    <div class="field">
       <label for="maxWalk">你可接受的上車站距離</label>
       <select id="maxWalk">
         <option value="500">500 公尺內</option>
@@ -113,17 +131,39 @@ footer{margin:20px 2px;color:var(--muted);font-size:12px;line-height:1.8}a{color
     <div class="actions"><button id="confirmPin" type="button" class="btn3">確認位置並繼續</button><button id="cancelPin" type="button" class="btnDark">取消</button></div>
   </section>
 </section>
+</div>
 
 <div id="status" class="status" aria-live="polite"></div>
+<div class="tabPane" id="pane-buses" hidden>
 <section id="resultSection" hidden>
   <div class="routeHead"><h2 class="sectionTitle" id="resultTitle">推薦搭乘路線</h2><span class="tag" id="resultCount"></span></div>
+  <p id="sortExplanation" class="hint">排序方式：親友開車道路距離由近到遠。</p>
   <div id="results"></div>
 </section>
+<div id="busEmpty" class="empty">先到「路線規劃」輸入兩個地點並搜尋，即可比較最快可搭班次。</div>
+</div>
 
+<div class="tabPane" id="pane-time" hidden>
+<section class="panel">
+<h2 class="sectionTitle" style="margin-top:0">指定上車時間</h2>
+<p class="hint">選擇你希望上車的日期與時間。系統會在搜尋時檢查即時到站資訊；若是未來時間，只有取得官方時刻表才能準確列出班次。</p>
+<div class="field"><label for="boardAtCopy">希望上車時間</label><input id="boardAtCopy" type="datetime-local"></div>
+<div class="actions"><button id="applyBoardTime" type="button">套用上車時間並重新搜尋</button></div>
+<div id="scheduledInfo" class="timeNotice">尚未搜尋。請先完成路線規劃。</div>
+</section>
+</div>
+
+<div class="tabPane" id="pane-history" hidden>
 <section class="subpanel">
   <div class="routeHead"><h2 class="sectionTitle" style="margin:0">最近搜尋紀錄</h2><button type="button" class="btn2 smallBtn" id="clearHistory">清除紀錄</button></div>
   <div id="historyList"></div>
+  <h2 class="sectionTitle">我的常用地點</h2>
+  <div class="favoriteRow">
+    <select id="favoriteSelectCopy"><option value="">選擇已收藏的地點</option></select>
+    <button type="button" class="btn2 smallBtn" id="loadFavoriteCopy">帶入</button>
+  </div>
 </section>
+</div>
 
 <footer>
   <b>資料與估算方式</b><br>
@@ -156,7 +196,12 @@ function dist(a,b){const rad=x=>x*Math.PI/180,R=6371000,d1=rad(b.lat-a.lat),d2=r
 function fmt(m){return m<1000?Math.round(m)+" 公尺":(m/1000).toFixed(2)+" 公里";}
 function fmtTime(sec){if(!Number.isFinite(sec))return"無法估算";let m=Math.max(1,Math.round(sec/60));return m<60?"約 "+m+" 分鐘":"約 "+Math.floor(m/60)+" 小時 "+(m%60?m%60+" 分鐘":"");}
 async function fetchJson(url,options={}){const r=await fetch(url,options);if(!r.ok)throw Error("HTTP "+r.status);return r.json();}
-function setDefaultDeparture(){const d=new Date(Date.now()+10*60000);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$("departAt").value=d.toISOString().slice(0,16);}
+function setDefaultDeparture(){const d=new Date(Date.now()+10*60000);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$("departAt").value=d.toISOString().slice(0,16);$("boardAt").value=d.toISOString().slice(0,16);$("boardAtCopy").value=d.toISOString().slice(0,16);}
+function setTab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));document.querySelectorAll(".tabPane").forEach(p=>p.hidden=p.id!=="pane-"+name);if(name==="buses"&&$("resultSection").hidden)$("busEmpty").hidden=false;else if(name==="buses")$("busEmpty").hidden=true;}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+$("boardAt").addEventListener("change",()=>{$("boardAtCopy").value=$("boardAt").value;});
+$("boardAtCopy").addEventListener("change",()=>{$("boardAt").value=$("boardAtCopy").value;});
+$("applyBoardTime").onclick=()=>{setTab("plan");findRoutes();};
 function isTaichung(x){return /台中|臺中|Taichung/i.test((x.display_name||"")+" "+JSON.stringify(x.properties||{}));}
 
 async function geocodePlace(text){
@@ -297,7 +342,9 @@ function renderCandidates(rows,from,to){
     const card=document.createElement("article");card.className="card";
     const head=document.createElement("div");head.className="routeHead";
     const title=document.createElement("div");title.className="routeName";title.textContent=(i+1)+". "+c.route+" 路";
-    const badge=document.createElement("span");badge.className="tag";badge.textContent=c.directionText;
+    const badge=document.createElement("span");badge.className="tag";
+    const currentMode=$("sortMode").value;
+    badge.textContent=(i===0 ? (currentMode==="time" ? "開車時間最短 · " : currentMode==="walk" ? "上車步行最近 · " : "親友開車距離最近 · ") : "")+c.directionText;
     head.append(title,badge);
     const path=document.createElement("div");path.className="path";
     const start=document.createElement("div");start.innerHTML="<small>建議上車站</small>";const sb=document.createElement("strong");sb.textContent=c.board.stop;const sm=document.createElement("small");sm.textContent="距你約 "+fmt(c.boardStraight)+"（直線）";start.append(sb,sm);
@@ -308,14 +355,52 @@ function renderCandidates(rows,from,to){
     const m1=document.createElement("div");m1.className="metric";m1.innerHTML="<small>親友開車到下車站</small>";const v1=document.createElement("b");v1.textContent=fmt(c.friendDrive);const l1=document.createElement("small");l1.textContent="道路距離";m1.append(v1,l1);
     const m2=document.createElement("div");m2.className="metric";m2.innerHTML="<small>預估開車時間</small>";const v2=document.createElement("b");v2.textContent=fmtTime(c.friendTime);const l2=document.createElement("small");l2.textContent=$("departAt").value?"指定出發時間估算":"目前路況估算";m2.append(v2,l2);
     metrics.append(m1,m2);
+    const arrival=document.createElement("div");arrival.className="busArrival";arrival.innerHTML="<h4>最快可搭班次／即時到站</h4><div class='arrivalLoading'>正在讀取即時到站資料…</div>";
     const links=document.createElement("div");links.className="links";
     const map=document.createElement("a");map.href=makeMapsLink(to,c.alight);map.target="_blank";map.rel="noopener";map.textContent="親友開車到下車站 ↗";
     const eta=document.createElement("a");eta.href="#";eta.textContent="查詢上車站即時到站時間";eta.onclick=e=>{e.preventDefault();queryEta(c,eta,card);};
     const walk=document.createElement("a");walk.href="https://www.google.com/maps/dir/?api=1&origin="+encodeURIComponent(from.lat+","+from.lon)+"&destination="+encodeURIComponent(c.board.lat+","+c.board.lon)+"&travelmode=walking";walk.target="_blank";walk.rel="noopener";walk.textContent="查看你步行到上車站路線 ↗";
     links.append(map,walk,eta);
-    card.append(head,path,metrics,links);root.appendChild(card);
+    card.append(head,path,metrics,arrival,links);root.appendChild(card);
+    loadArrivalOptions(c,arrival);
   });
+  $("busEmpty").hidden=true;
 }
+async function loadArrivalOptions(candidate,container){
+  try{
+    const route=String(candidate.route).replace(/'/g,"''");
+    const filter="RouteName/Zh_tw eq '"+route+"' and Direction eq "+candidate.direction;
+    const url=TDX+"/EstimatedTimeOfArrival/City/Taichung?$filter="+encodeURIComponent(filter)+"&$top=1000&$format=JSON";
+    const data=await fetchJson(url);
+    const matches=(data||[]).filter(x=>(x.StopUID&&candidate.board.stopUID?x.StopUID===candidate.board.stopUID:clean(fieldName(x.StopName))===clean(candidate.board.stop)));
+    const now=Date.now(),target=$("boardAt").value?new Date($("boardAt").value).getTime():now;
+    const targetIsFuture=target>now+3*60000;
+    const valid=matches.map(x=>{
+      const sec=Number(x.EstimateTime);
+      const min=Number.isFinite(sec)&&sec>=0?Math.ceil(sec/60):null;
+      return {x,min};
+    }).filter(v=>v.min!==null).sort((a,b)=>a.min-b.min);
+    if(targetIsFuture){
+      container.innerHTML="<h4>指定上車時間</h4><div class='timeNotice'>你選的是未來時間（"+new Date(target).toLocaleString("zh-TW")+"）。目前取得的是即時到站資料，不能直接當成未來班表；這個路線尚未取得可驗證的未來發車時刻，因此不會虛構班次。</div>";
+      return;
+    }
+    if(!valid.length){
+      container.innerHTML="<h4>最快可搭班次</h4><div class='arrivalLine'><span>目前沒有可用的即時到站預估</span><small>可能尚未發車或資料暫缺</small></div>";
+      return;
+    }
+    container.innerHTML="<h4>最快可搭班次（即時預估）</h4>";
+    valid.slice(0,3).forEach((v,i)=>{
+      const row=document.createElement("div");row.className="arrivalLine";
+      const left=document.createElement("span");left.textContent=(i+1)+". "+candidate.board.stop;
+      const right=document.createElement("strong");right.textContent=v.min<=1?"即將到站":"約 "+v.min+" 分鐘";
+      row.append(left,right);container.appendChild(row);
+    });
+    const note=document.createElement("small");note.textContent="以 TDX 目前提供的到站預估為準；車況與交通可能變動。";container.appendChild(note);
+  }catch(e){
+    container.innerHTML="<h4>最快可搭班次</h4><div class='arrivalLine'>暫時無法取得即時到站資料，請稍後再試。</div>";
+  }
+}
+
 async function queryEta(candidate,link,card){
   link.textContent="查詢中…";
   const box=document.createElement("div");box.className="eta";box.textContent="正在向 TDX 查詢即時到站資料…";
@@ -347,13 +432,16 @@ function readStore(k){try{return JSON.parse(localStorage.getItem(k)||"[]");}catc
 function saveFavoritesUI(){
   const fav=readStore("tc_bus_favorites");$("favoriteSelect").innerHTML='<option value="">選擇已收藏的地點</option>';
   fav.forEach((f,i)=>{const o=document.createElement("option");o.value=String(i);o.textContent=f.name+"（"+f.from+" → "+f.to+"）";$("favoriteSelect").appendChild(o);});
+  if($("favoriteSelectCopy"))$("favoriteSelectCopy").innerHTML=$("favoriteSelect").innerHTML;
 }
 $("saveFavorite").onclick=()=>{
   const from=$("fromPlace").value.trim(),to=$("toPlace").value.trim();if(!from||!to){say("請先填寫你的所在地與親友接送地點，再收藏。");return;}
   const fav=readStore("tc_bus_favorites");const name=prompt("替這組常用地點取個名稱，例如：家到學校");if(!name)return;
   fav.unshift({name,from,to});localStorage.setItem("tc_bus_favorites",JSON.stringify(fav.slice(0,30)));saveFavoritesUI();say("已收藏這組常用地點。");
 };
-$("loadFavorite").onclick=()=>{const i=$("favoriteSelect").value;if(i==="")return;const f=readStore("tc_bus_favorites")[Number(i)];if(f){$("fromPlace").value=f.from;$("toPlace").value=f.to;say("已帶入收藏地點："+f.name);}};
+function loadFavoriteAt(selectId){const i=$(selectId).value;if(i==="")return;const f=readStore("tc_bus_favorites")[Number(i)];if(f){$("fromPlace").value=f.from;$("toPlace").value=f.to;setTab("plan");say("已帶入收藏地點："+f.name);}}
+$("loadFavorite").onclick=()=>loadFavoriteAt("favoriteSelect");
+$("loadFavoriteCopy").onclick=()=>loadFavoriteAt("favoriteSelectCopy");
 function renderHistory(){
   const root=$("historyList"),hist=readStore("tc_bus_history");root.innerHTML="";
   hist.slice(0,10).forEach((h,i)=>{const row=document.createElement("div");row.className="historyItem";const t=document.createElement("span");t.textContent=h.from+" → "+h.to;const b=document.createElement("button");b.className="btn2 smallBtn";b.textContent="再次使用";b.onclick=()=>{$("fromPlace").value=h.from;$("toPlace").value=h.to;$("departAt").value=h.depart||"";window.scrollTo({top:0,behavior:"smooth"});};row.append(t,b);root.appendChild(row);});
@@ -376,13 +464,17 @@ async function runWithPoints(from,to){
     say("找到 "+candidates.length+" 個路線方向候選，正在比較親友開車到下車站的道路距離…");
     const ranked=await getFriendDriveMatrix(to,candidates);
     const mode=$("sortMode").value;
+    const sortText = mode==="time" ? "親友開車時間由短到長" : mode==="walk" ? "你步行到上車站的直線距離由近到遠" : "親友開車道路距離由近到遠";
+    $("sortExplanation").textContent = "目前排序："+sortText+"。每個下車站的開車距離／時間以 Google 路線結果計算；上車站距離仍為直線估算。";
     ranked.sort((a,b)=>mode==="time"?(a.friendTime-b.friendTime||a.friendDrive-b.friendDrive):mode==="walk"?(a.boardStraight-b.boardStraight||a.friendDrive-b.friendDrive):(a.friendDrive-b.friendDrive||a.friendTime-b.friendTime));
     const unique=ranked.slice(0,20);
     renderCandidates(unique,from,to);
     $("resultTitle").textContent="從「"+$("fromPlace").value+"」前往親友附近的公車建議";
     $("resultCount").textContent="比較 "+ranked.length+" 個路線方向";
     $("resultSection").hidden=false;
-    say("完成！上車站接近距離是直線估算；親友開車距離與時間採 Google 道路路線計算。");
+    $("scheduledInfo").textContent="已完成路線比較。最快可搭班次會顯示在「最快班次」頁籤；未來指定時間需要官方可驗證班表，否則僅顯示目前即時資訊，不會用即時資料冒充未來班次。";
+    setTab("buses");
+    say("完成！已列出路線比較與可取得的即時到站預估。");
     addHistory($("fromPlace").value,$("toPlace").value,$("departAt").value);
   }finally{btn.disabled=false;}
 }
