@@ -71,6 +71,11 @@ button:active:not(:disabled){transform:translateY(0)}
 .history-dropdown{position:absolute;left:0;right:0;top:calc(100% - 28px);z-index:30;background:#fff;border:1px solid #e4e8ec;border-radius:0 0 18px 18px;box-shadow:0 12px 28px #152b3b1c;padding:7px 0;max-height:230px;overflow-y:auto}
 .history-dropdown[hidden]{display:none}
 .history-suggestion{display:flex;align-items:center;gap:14px;width:100%;border:0;background:#fff;color:#202124;text-align:left;padding:13px 16px;cursor:pointer;font:inherit;min-height:48px}
+.history-suggestion-row{display:flex;align-items:center;width:100%;background:#fff}
+.history-suggestion-row:hover{background:#f2f5f7}
+.history-suggestion-row .history-suggestion{flex:1;min-width:0}
+.history-delete{flex:none;border:0;background:transparent;color:#7b8791;cursor:pointer;font-size:17px;width:42px;height:44px;border-radius:9px;margin-right:5px}
+.history-delete:hover{background:#ffeceb;color:#c34f45}
 .history-suggestion:hover,.history-suggestion:focus{background:#f2f5f7;outline:none}
 .history-clock{flex:0 0 22px;color:#69737d;font-size:19px;text-align:center}
 .history-suggestion-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
@@ -563,7 +568,8 @@ function renderHistoryDropdown(){
   if(!history.length){
     const empty=document.createElement("div");empty.className="history-empty";empty.textContent="尚無搜尋紀錄";box.append(empty);return;
   }
-  history.forEach(q=>{
+  history.forEach((q,index)=>{
+    const row=document.createElement("div");row.className="history-suggestion-row";
     const item=document.createElement("button");item.type="button";item.className="history-suggestion";item.setAttribute("role","option");
     const icon=document.createElement("span");icon.className="history-clock";icon.textContent="◷";
     const label=document.createElement("span");label.className="history-suggestion-text";
@@ -573,10 +579,16 @@ function renderHistoryDropdown(){
     label.append(route);item.append(icon,label);
     item.addEventListener("pointerdown",e=>e.preventDefault());
     item.addEventListener("click",()=>{applyQuery(q);box.hidden=true;});
-    box.append(item);
+    const del=document.createElement("button");del.type="button";del.className="history-delete";del.title="刪除此筆搜尋紀錄";del.setAttribute("aria-label","刪除此筆搜尋紀錄");del.textContent="×";
+    del.addEventListener("pointerdown",e=>e.preventDefault());
+    del.addEventListener("click",e=>{
+      e.preventDefault();e.stopPropagation();
+      const latest=readStore(HISTORY_KEY);latest.splice(index,1);writeStore(HISTORY_KEY,latest);renderHistoryDropdown();
+    });
+    row.append(item,del);box.append(row);
   });
   const footer=document.createElement("div");footer.className="history-clear-row";
-  const clear=document.createElement("button");clear.type="button";clear.className="history-clear";clear.textContent="清除搜尋紀錄";
+  const clear=document.createElement("button");clear.type="button";clear.className="history-clear";clear.textContent="清除全部搜尋紀錄";
   clear.addEventListener("click",e=>{e.stopPropagation();writeStore(HISTORY_KEY,[]);renderHistoryDropdown();});
   footer.append(clear);box.append(footer);
 }
