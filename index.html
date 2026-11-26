@@ -738,7 +738,7 @@ main > .panel { padding-left: 0 !important; padding-right: 0 !important; }
     <label for="address">親友要來接你的地址</label>
     <input id="address" placeholder="例如：台中市西屯區臺灣大道三段99號" autocomplete="street-address">
     <div id="historyDropdown" class="history-dropdown" hidden role="listbox" aria-label="最近搜尋紀錄"></div>
-    <p class="hint">可輸入完整門牌，例如：台中市潭子區勝利路131號。定位完成後請核對地圖位置。</p>
+    <p class="hint">輸入親友所在地址，例如：高工路191號。定位完成後請核對地圖位置。</p>
   </div>
   <div class="grid">
     <div class="field">
@@ -923,7 +923,7 @@ async function locateAddress(address){
     }
   }
   if(lastError && !candidates.length) throw Error("地址定位服務目前無法連線，請確認網路後重試。");
-  if(number) throw Error("地圖資料找不到這個門牌，也找不到可用的道路定位點。請確認地址格式，例如「台中市潭子區勝利路131號」。");
+  if(number) throw Error("地圖資料找不到這個門牌，也找不到可用的道路定位點。請確認地址格式，例如「高工路191號」。");
   throw Error("找不到這個地址。請輸入完整地址或附近地標。");
 }
 
